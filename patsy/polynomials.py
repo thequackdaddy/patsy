@@ -169,7 +169,8 @@ class Poly(object):
 
     @staticmethod
     def apply_standardize(x, mean, var):
-        return (x - mean) / var ** 0.5
+        x[:, 1:] = ((x[:, 1:] - mean[1:]) / (var[1:] ** 0.5))
+        return x
         
 
     __getstate__ = no_pickling
