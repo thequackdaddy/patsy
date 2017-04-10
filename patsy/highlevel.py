@@ -152,7 +152,7 @@ def incr_dbuilders(formula_like, data_iter_maker, eval_env=0,
 #   (DesignInfo, DesignInfo)
 #   any object with a special method __patsy_get_model_desc__
 def _do_highlevel_design(formula_like, data, eval_env,
-                         NA_action, return_type):
+                         NA_action, return_type, n_jobs=1):
     if return_type == "dataframe" and not have_pandas:
         raise PatsyError("pandas.DataFrame was requested, but pandas "
                             "is not installed")
@@ -166,7 +166,7 @@ def _do_highlevel_design(formula_like, data, eval_env,
     if design_infos is not None:
         return build_design_matrices(design_infos, data,
                                      NA_action=NA_action,
-                                     return_type=return_type)
+                                     return_type=return_type, n_jobs=n_jobs)
     else:
         # No builders, but maybe we can still get matrices
         if isinstance(formula_like, tuple):
@@ -223,7 +223,7 @@ def _do_highlevel_design(formula_like, data, eval_env,
         return (lhs, rhs)
 
 def dmatrix(formula_like, data={}, eval_env=0,
-            NA_action="drop", return_type="matrix"):
+            NA_action="drop", return_type="matrix", n_jobs=1):
     """Construct a single design matrix given a formula_like and data.
 
     :arg formula_like: An object that can be used to construct a design
@@ -288,14 +288,14 @@ def dmatrix(formula_like, data={}, eval_env=0,
     """
     eval_env = EvalEnvironment.capture(eval_env, reference=1)
     (lhs, rhs) = _do_highlevel_design(formula_like, data, eval_env,
-                                      NA_action, return_type)
+                                      NA_action, return_type, n_jobs=n_jobs)
     if lhs.shape[1] != 0:
         raise PatsyError("encountered outcome variables for a model "
                             "that does not expect them")
     return rhs
 
 def dmatrices(formula_like, data={}, eval_env=0,
-              NA_action="drop", return_type="matrix"):
+              NA_action="drop", return_type="matrix", n_jobs=1):
     """Construct two design matrices given a formula_like and data.
 
     This function is identical to :func:`dmatrix`, except that it requires
@@ -307,7 +307,7 @@ def dmatrices(formula_like, data={}, eval_env=0,
     """
     eval_env = EvalEnvironment.capture(eval_env, reference=1)
     (lhs, rhs) = _do_highlevel_design(formula_like, data, eval_env,
-                                      NA_action, return_type)
+                                      NA_action, return_type, n_jobs=n_jobs)
     if lhs.shape[1] == 0:
         raise PatsyError("model is missing required outcome variables")
     return (lhs, rhs)

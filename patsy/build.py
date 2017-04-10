@@ -25,6 +25,8 @@ from patsy.eval import EvalEnvironment
 from patsy.contrasts import code_contrast_matrix, Treatment
 from patsy.compat import OrderedDict
 from patsy.missing import NAAction
+from joblib.parallel import Parallel, delayed
+
 
 if have_pandas:
     import pandas
@@ -797,7 +799,7 @@ class _CheckMatch(object):
 def build_design_matrices(design_infos, data,
                           NA_action="drop",
                           return_type="matrix",
-                          dtype=np.dtype(float)):
+                          dtype=np.dtype(float), n_jobs=1):
     """Construct several design matrices from :class:`DesignMatrixBuilder`
     objects.
 
@@ -883,7 +885,15 @@ def build_design_matrices(design_infos, data,
         # We look at evaluators rather than factors here, because it might
         # happen that we have the same factor twice, but with different
         # memorized state.
+        factor_infos = {fi for fi in six.itervalues(design_info.factor_infos)}
+        factor_infos = list(factor_infos)
+        nas_values = Parallel(n_jobs=n_jobs)(delayed(_build_factor_info)
+                                         (fi, data, NA_action)
+                                         for fi in factor_infos
+                                         )
+        """
         for factor_info in six.itervalues(design_info.factor_infos):
+            
             if factor_info not in factor_info_to_values:
                 value, is_NA = _eval_factor(factor_info, data, NA_action)
                 factor_info_to_isNAs[factor_info] = is_NA
@@ -902,6 +912,10 @@ def build_design_matrices(design_infos, data,
                 # categories).
                 value = np.asarray(value)
                 factor_info_to_values[factor_info] = value
+        """
+        for fi, na_value in zip(factor_infos, nas_values):
+            factor_info_to_values[fi] = na_value[1]
+            factor_info_to_isNAs[fi] = na_value[0]
     # Handle NAs
     values = list(factor_info_to_values.values())
     is_NAs = list(factor_info_to_isNAs.values())
@@ -962,3 +976,24 @@ def build_design_matrices(design_infos, data,
 
 # It should be possible to do just the factors -> factor_infos stuff
 # alone, since that, well, makes logical sense to do.
+
+
+def _build_factor_info(factor_info, data, NA_action):
+    factor_info, data, NA_action
+    rows_checker = _CheckMatch("Number of rows", lambda a, b: a == b)
+    index_checker = _CheckMatch("Index", lambda a, b: a.equals(b))
+    value, is_NA = _eval_factor(factor_info, data, NA_action)
+    # value may now be a Series, DataFrame, or ndarray
+    name = factor_info.factor.name()
+    origin = factor_info.factor.origin
+    rows_checker.check(value.shape[0], name, origin)
+    if (have_pandas and isinstance(value, (pandas.Series, pandas.DataFrame))):
+        index_checker.check(value.index, name, origin)
+    # Strategy: we work with raw ndarrays for doing the actual
+    # combining; DesignMatrixBuilder objects never sees pandas
+    # objects. Then at the end, if a DataFrame was requested, we
+    # convert. So every entry in this dict is either a 2-d array
+    # of floats, or a 1-d array of integers (representing
+    # categories).
+    value = np.asarray(value)
+    return is_NA, value
